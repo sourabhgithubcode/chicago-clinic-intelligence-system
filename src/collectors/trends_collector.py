@@ -41,9 +41,9 @@ class GoogleTrendsCollector:
         self.failed_count = 0
 
         # Geographic code for Chicago
-        self.geo_code = 'US-IL-674'  # Chicago DMA
+        self.geo_code = 'US-IL'  # Chicago DMA
 
-    def get_interest_over_time(self, keyword, timeframe='today 3-m', category=None):
+    def get_interest_over_time(self, keyword, timeframe='today 12-m', category=None):
         """
         Get interest over time for a keyword.
         """
@@ -53,8 +53,7 @@ class GoogleTrendsCollector:
                 [keyword],
                 cat=0,
                 timeframe=timeframe,
-                geo=self.geo_code,
-                gprop=''
+                geo=self.geo_code
             )
 
             # Get data

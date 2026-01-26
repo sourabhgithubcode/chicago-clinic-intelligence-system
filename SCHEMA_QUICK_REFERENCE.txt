@@ -1,0 +1,234 @@
+═══════════════════════════════════════════════════════════════════════════
+                DATABASE SCHEMA - QUICK REFERENCE GUIDE
+═══════════════════════════════════════════════════════════════════════════
+
+📊 7 TABLES ORGANIZED IN 3 TIERS
+═══════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TIER 1: RAW DATA COLLECTION (Source Tables)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+1. CLINICS (116 records) ⭐ MASTER TABLE
+   ├─ Primary Key: id
+   ├─ Unique: google_place_id, yelp_business_id
+   ├─ Data: name, address, city, state, zip_code, phone, website
+   ├─ Ratings: google_rating, yelp_rating
+   ├─ Reviews: google_review_count, yelp_review_count
+   └─ Relationships:
+      ├─→ HAS MANY: reviews (1:Many)
+      └─→ HAS MANY: visibility_scores (1:Many)
+
+2. REVIEWS (178 records)
+   ├─ Primary Key: id
+   ├─ Foreign Key: clinic_id → clinics.id
+   ├─ Data: source (google/yelp), rating, text, author_name, review_date
+   ├─ Sentiment: sentiment_score, sentiment_label
+   └─ Relationship:
+      └─→ BELONGS TO: clinics (Many:1)
+      └─→ CASCADE DELETE: Deleted when parent clinic is deleted
+
+3. SEARCH_TRENDS (1,512 records)
+   ├─ Primary Key: id
+   ├─ Data: keyword, service_category, date, interest_score
+   ├─ Averages: interest_7day_avg, interest_30day_avg
+   └─ Relationship: STANDALONE (no foreign keys)
+      └─→ USED BY: demand_metrics (for calculations)
+
+4. DATA_COLLECTION_LOGS (11 records)
+   ├─ Primary Key: id
+   ├─ Data: collection_type, start_time, end_time, status
+   ├─ Metrics: records_collected, records_updated, records_failed
+   └─ Relationship: STANDALONE (monitoring only)
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TIER 2: CALCULATED METRICS (Derived Tables)                            │
+└─────────────────────────────────────────────────────────────────────────┘
+
+5. VISIBILITY_SCORES
+   ├─ Primary Key: id
+   ├─ Foreign Key: clinic_id → clinics.id
+   ├─ Data: calculation_date, rating_score, review_volume_score
+   ├─ Scores: recency_score, geographic_score, overall_visibility_score
+   ├─ Rankings: local_rank, city_rank
+   └─ Relationship:
+      └─→ BELONGS TO: clinics (Many:1)
+      └─→ CASCADE DELETE: Deleted when parent clinic is deleted
+
+6. DEMAND_METRICS
+   ├─ Primary Key: id
+   ├─ Data: service_category, zip_code, calculation_date
+   ├─ Demand: search_demand_index, search_volume_trend
+   ├─ Supply: clinic_count, avg_rating, total_review_count
+   ├─ Ratios: demand_to_competition_ratio, opportunity_score
+   └─ Relationship: STANDALONE (aggregated from clinics + search_trends)
+
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TIER 3: MARKET ANALYSIS (Aggregate Tables)                             │
+└─────────────────────────────────────────────────────────────────────────┘
+
+7. COMPETITOR_ANALYSIS
+   ├─ Primary Key: id
+   ├─ Data: zip_code, calculation_date, total_clinics
+   ├─ Breakdown: by_type (JSON), avg_rating, avg_review_count
+   ├─ Market: top_3_market_share, high_rated_count, low_review_count
+   ├─ Geography: clinic_density_per_sqkm
+   └─ Relationship: STANDALONE (aggregated from clinics)
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        RELATIONSHIP DIAGRAM
+═══════════════════════════════════════════════════════════════════════════
+
+                    ┌──────────────────┐
+                    │   CLINICS (116)  │ ⭐ MASTER
+                    │   PK: id         │
+                    └────────┬─────────┘
+                             │
+                ┌────────────┼────────────┐
+                │                         │
+                ▼                         ▼
+        ┌───────────────┐         ┌──────────────────┐
+        │ REVIEWS (178) │         │ VISIBILITY_SCORES│
+        │ FK: clinic_id │         │ FK: clinic_id    │
+        └───────────────┘         └──────────────────┘
+        Many reviews per clinic   Many scores per clinic
+        CASCADE DELETE            CASCADE DELETE
+
+
+    ┌────────────────────┐
+    │ SEARCH_TRENDS      │  No foreign keys
+    │ (1,512 records)    │  Used for calculations ─┐
+    └────────────────────┘                         │
+                                                    ▼
+                                            ┌──────────────────┐
+                                            │ DEMAND_METRICS   │
+                                            │ (Aggregated)     │
+                                            └──────────────────┘
+
+
+                                            ┌──────────────────────┐
+                                            │ COMPETITOR_ANALYSIS  │
+                                            │ (Aggregated)         │
+                                            └──────────────────────┘
+
+
+    ┌────────────────────────┐
+    │ DATA_COLLECTION_LOGS   │  No relationships
+    │ (Monitoring Only)      │  Tracks pipeline runs
+    └────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        FOREIGN KEY RELATIONSHIPS
+═══════════════════════════════════════════════════════════════════════════
+
+Parent Table    Child Table           Relationship  On Delete
+──────────────  ────────────────────  ────────────  ─────────────────
+CLINICS         REVIEWS               1:Many        CASCADE (delete all)
+CLINICS         VISIBILITY_SCORES     1:Many        CASCADE (delete all)
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        KEY INDEXES FOR PERFORMANCE
+═══════════════════════════════════════════════════════════════════════════
+
+Table                  Index Name                      Columns
+─────────────────────  ──────────────────────────────  ────────────────────
+clinics                ix_clinics_google_place_id      google_place_id (UQ)
+clinics                ix_clinics_yelp_business_id     yelp_business_id (UQ)
+clinics                ix_clinics_zip_code             zip_code
+clinics                ix_clinics_city                 city
+clinics                ix_clinics_clinic_type          clinic_type
+
+reviews                (automatic)                     clinic_id (FK)
+reviews                idx_clinic_source               clinic_id, source
+reviews                idx_review_date                 review_date
+
+search_trends          (automatic)                     keyword
+search_trends          idx_keyword_date                keyword, date
+search_trends          idx_category_date               service_category, date
+
+visibility_scores      (automatic)                     clinic_id (FK)
+visibility_scores      idx_clinic_date                 clinic_id, calc_date
+visibility_scores      (automatic)                     overall_visibility_score
+
+demand_metrics         idx_category_zip_date           service_category, zip_code, calc_date
+
+competitor_analysis    idx_zip_date                    zip_code, calc_date
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        EXAMPLE QUERIES
+═══════════════════════════════════════════════════════════════════════════
+
+1. GET CLINIC WITH ALL REVIEWS:
+   ───────────────────────────────────────────────────────────────────────
+   SELECT c.name, r.rating, r.text, r.source
+   FROM clinics c
+   LEFT JOIN reviews r ON c.id = r.clinic_id
+   WHERE c.name = 'Michigan Avenue Immediate Care';
+
+
+2. GET CLINIC WITH LATEST VISIBILITY SCORE:
+   ───────────────────────────────────────────────────────────────────────
+   SELECT c.name, vs.overall_visibility_score, vs.local_rank
+   FROM clinics c
+   LEFT JOIN visibility_scores vs ON c.id = vs.clinic_id
+   WHERE vs.calculation_date = (
+       SELECT MAX(calculation_date) FROM visibility_scores
+   );
+
+
+3. FIND HIGH-OPPORTUNITY MARKETS:
+   ───────────────────────────────────────────────────────────────────────
+   SELECT dm.zip_code, dm.service_category, dm.opportunity_score
+   FROM demand_metrics dm
+   WHERE dm.opportunity_score > 80
+   ORDER BY dm.opportunity_score DESC;
+
+
+4. COMPARE CLINICS IN SAME ZIP:
+   ───────────────────────────────────────────────────────────────────────
+   SELECT name, google_rating, yelp_rating, zip_code
+   FROM clinics
+   WHERE zip_code = '60601'
+   ORDER BY google_rating DESC;
+
+
+5. GET SEARCH TRENDS FOR SERVICE:
+   ───────────────────────────────────────────────────────────────────────
+   SELECT keyword, date, interest_score, interest_7day_avg
+   FROM search_trends
+   WHERE keyword = 'urgent care'
+   ORDER BY date DESC
+   LIMIT 30;
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        DATA TYPES USED
+═══════════════════════════════════════════════════════════════════════════
+
+Type        Purpose                         Example Columns
+──────────  ──────────────────────────────  ─────────────────────────
+INTEGER     Primary keys, counts, scores    id, review_count, interest_score
+VARCHAR     Text with max length            name(500), address(500), zip_code(10)
+TEXT        Unlimited text                  review_text, error_message
+FLOAT       Decimal numbers                 rating, latitude, longitude
+BOOLEAN     True/False flags                is_active, is_open_now
+DATETIME    Timestamps                      created_at, last_updated, start_time
+DATE        Dates only                      calculation_date, search_date
+JSON        Structured data                 categories, hours_json, by_type
+
+
+═══════════════════════════════════════════════════════════════════════════
+                        FILE LOCATION
+═══════════════════════════════════════════════════════════════════════════
+
+Database File:  /Users/HP/clinic intelligent system/data/clinic_intelligence.db
+Models File:    /Users/HP/clinic intelligent system/src/database/models.py
+Schema Docs:    /Users/HP/clinic intelligent system/docs/DATABASE_SCHEMA.md
+
+═══════════════════════════════════════════════════════════════════════════

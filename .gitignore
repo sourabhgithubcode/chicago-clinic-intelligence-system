@@ -63,3 +63,9 @@ Thumbs.db
 # Credentials
 credentials.json
 service_account.json
+sourabhgithubcode/
+.env
+.enves
+*.pbix
+__pycache__/
+*.pyc

@@ -21,6 +21,7 @@ from config.settings import (
 )
 from src.database.models import Clinic, Review, DataCollectionLog
 from src.database.init_db import get_session
+from src.utils.clinic_matcher import ClinicMatcher, merge_clinic_data
 
 
 class YelpCollector:
@@ -62,7 +63,6 @@ class YelpCollector:
         except Exception as e:
             logger.error(f"Yelp search failed for {location}: {e}")
             return []
-
     def get_business_details(self, business_id):
         """
         Get detailed business information.
@@ -70,14 +70,86 @@ class YelpCollector:
         url = f"{self.base_url}/businesses/{business_id}"
 
         try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
+            response = requests.get(
+                url,
+                headers=self.headers,
+                timeout=15
+            )
 
+            if response.status_code == 404:
+                logger.warning(
+                    f"Yelp details not found (404) for business_id={business_id}"
+                )
+                return {}
+
+            if response.status_code == 403:
+                logger.warning(
+                    f"Yelp details forbidden (403) for business_id={business_id}"
+                )
+                return {}
+
+            response.raise_for_status()
             return response.json()
 
-        except Exception as e:
-            logger.error(f"Failed to get details for {business_id}: {e}")
+        except requests.exceptions.HTTPError as e:
+            logger.warning(
+                f"Yelp details HTTP error for business_id={business_id}: {e}"
+            )
             return {}
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(
+                f"Yelp details request failed for business_id={business_id}: {e}"
+            )
+            return {}
+
+        except Exception as e:
+            logger.warning(
+                f"Unexpected error in get_business_details for business_id={business_id}: {e}"
+            )
+            return {}
+
+   
+    def map_yelp_categories_to_clinic_type(self, categories):
+        """
+        Map Yelp categories to internal clinic_type.
+        categories: list[str] of Yelp category titles or aliases
+        """
+        if not categories:
+            return None
+
+        cats = " ".join([c.lower() for c in categories])
+
+        # Urgent care
+        if "urgent care" in cats or "emergency" in cats:
+            return "urgent_care"
+
+        # Dental
+        if "dentist" in cats or "dental" in cats or "orthodont" in cats:
+            return "dental"
+
+        # Pediatric
+        if "pediatric" in cats or "children" in cats:
+            return "pediatric"
+
+        # Physical therapy
+        if "physical therapy" in cats or "physiotherapy" in cats:
+            return "specialty"
+
+        # Dermatology
+        if "dermatolog" in cats or "skin" in cats:
+            return "specialty"
+
+        # Primary care or general clinics
+        if (
+            "medical center" in cats
+            or "family practice" in cats
+            or "internal medicine" in cats
+            or "clinic" in cats
+        ):
+            return "primary_care"
+
+        return None
 
     def get_reviews(self, business_id):
         """
@@ -86,85 +158,187 @@ class YelpCollector:
         url = f"{self.base_url}/businesses/{business_id}/reviews"
 
         try:
-            response = requests.get(url, headers=self.headers)
+            response = requests.get(url, headers=self.headers, timeout=15)
+
+            # Handle common Yelp API cases cleanly
+            if response.status_code == 404:
+                logger.warning(f"Yelp reviews not found (404) for business_id={business_id}")
+                return []
+
+            if response.status_code == 403:
+                logger.warning(f"Yelp reviews forbidden (403) for business_id={business_id}")
+                return []
+
             response.raise_for_status()
 
             data = response.json()
-            return data.get('reviews', [])
+            return data.get("reviews", []) or []
+
+        except requests.exceptions.HTTPError as e:
+            # Any other non-2xx that made it past our explicit checks
+            logger.warning(f"Yelp reviews HTTP error for business_id={business_id}: {e}")
+            return []
+
+        except requests.exceptions.RequestException as e:
+            # Network, timeout, DNS, etc.
+            logger.warning(f"Yelp reviews request failed for business_id={business_id}: {e}")
+            return []
 
         except Exception as e:
-            logger.error(f"Failed to get reviews for {business_id}: {e}")
+            logger.warning(f"Unexpected error in get_reviews for business_id={business_id}: {e}")
             return []
+
 
     def match_or_create_clinic(self, business_data):
         """
         Match Yelp business to existing clinic or create new one.
+
+        IMPROVED MATCHING LOGIC:
+        ------------------------
+        Uses ClinicMatcher for intelligent matching:
+        1. First check by Yelp business ID (exact match)
+        2. Then use fuzzy matching: name similarity, coordinates, phone, address
+
+        EXAMPLE - Old vs New Matching:
+        ------------------------------
+        Old (basic LIKE query):
+            Yelp: "ABC Family Clinic"
+            DB:   "ABC Family Medical Clinic"
+            Result: NO MATCH (LIKE fails) → Creates duplicate
+
+        New (fuzzy matching):
+            Yelp: "ABC Family Clinic"
+            DB:   "ABC Family Medical Clinic"
+            Normalized: "abc family" vs "abc family"
+            Result: MATCH (93% similar) → Merges data
+
+        EXAMPLE - Coordinate Matching:
+        ------------------------------
+            Yelp: lat=41.8965, lng=-87.6205
+            DB clinic: lat=41.8967, lng=-87.6203
+            Distance: 28 meters
+            Result: MATCH (within 50m threshold) → Merges data
         """
         try:
             business_id = business_data.get('id')
             name = business_data.get('name')
             location = business_data.get('location', {})
+            coordinates = business_data.get('coordinates', {})
 
-            # Try to find existing clinic by Yelp ID
+            # Extract categories
+            raw_cats = business_data.get('categories', []) or []
+            category_titles = [c.get("title", "") for c in raw_cats if c.get("title")]
+            category_aliases = [c.get("alias", "") for c in raw_cats if c.get("alias")]
+            categories = category_titles + category_aliases
+            mapped_type = self.map_yelp_categories_to_clinic_type(categories)
+
+            # Step 1: Check exact Yelp ID match
             clinic = self.session.query(Clinic).filter_by(
                 yelp_business_id=business_id
             ).first()
 
-            # If not found, try to match by name and address
-            if not clinic:
-                zip_code = location.get('zip_code')
-                clinic = self.session.query(Clinic).filter(
-                    Clinic.name.ilike(f"%{name}%"),
-                    Clinic.zip_code == zip_code
-                ).first()
-
-            coordinates = business_data.get('coordinates', {})
-            categories = [cat['title'] for cat in business_data.get('categories', [])]
-
             if clinic:
-                # Update existing clinic with Yelp data
-                clinic.yelp_business_id = business_id
+                # Update existing Yelp clinic
                 clinic.yelp_rating = business_data.get('rating')
                 clinic.yelp_review_count = business_data.get('review_count')
                 clinic.yelp_price_level = business_data.get('price')
-
-                # Update if Google data doesn't exist
-                if not clinic.latitude:
-                    clinic.latitude = coordinates.get('latitude')
-                if not clinic.longitude:
-                    clinic.longitude = coordinates.get('longitude')
-                if not clinic.phone:
-                    clinic.phone = business_data.get('phone')
-                if not clinic.website:
-                    clinic.website = business_data.get('url')
-
+                if mapped_type and (not clinic.clinic_type or clinic.clinic_type == "unknown"):
+                    clinic.clinic_type = mapped_type
                 clinic.last_updated = datetime.utcnow()
                 self.updated_count += 1
                 action = "Updated"
 
             else:
-                # Create new clinic
-                clinic = Clinic(
-                    yelp_business_id=business_id,
-                    name=name,
-                    address=location.get('address1'),
-                    city=location.get('city'),
-                    state=location.get('state'),
-                    zip_code=location.get('zip_code'),
-                    phone=business_data.get('phone'),
-                    website=business_data.get('url'),
-                    latitude=coordinates.get('latitude'),
-                    longitude=coordinates.get('longitude'),
-                    yelp_rating=business_data.get('rating'),
-                    yelp_review_count=business_data.get('review_count'),
-                    yelp_price_level=business_data.get('price'),
-                    categories=categories,
-                    is_active=True
+                # Step 2: INTELLIGENT MATCHING using ClinicMatcher
+                # Prepare Yelp data for matching
+                new_clinic_data = {
+                    'name': name,
+                    'address': location.get('address1'),
+                    'phone': business_data.get('phone'),
+                    'latitude': coordinates.get('latitude'),
+                    'longitude': coordinates.get('longitude'),
+                    'zip_code': location.get('zip_code')
+                }
+
+                # Get all potential matches (clinics without Yelp ID in same ZIP)
+                zip_code = location.get('zip_code')
+                potential_matches = self.session.query(Clinic).filter(
+                    Clinic.yelp_business_id.is_(None),
+                    Clinic.zip_code == zip_code
+                ).all()
+
+                # Also check clinics with different ZIP but close coordinates
+                if coordinates.get('latitude') and coordinates.get('longitude'):
+                    # Include nearby clinics (within ~0.005 degrees ≈ 500m)
+                    lat, lng = coordinates.get('latitude'), coordinates.get('longitude')
+                    nearby_clinics = self.session.query(Clinic).filter(
+                        Clinic.yelp_business_id.is_(None),
+                        Clinic.latitude.between(lat - 0.005, lat + 0.005),
+                        Clinic.longitude.between(lng - 0.005, lng + 0.005)
+                    ).all()
+                    # Combine and deduplicate
+                    existing_ids = {c.id for c in potential_matches}
+                    for c in nearby_clinics:
+                        if c.id not in existing_ids:
+                            potential_matches.append(c)
+
+                # Find best match
+                matched_clinic, match_result = ClinicMatcher.find_matching_clinic(
+                    new_clinic_data, potential_matches, same_zip_only=False
                 )
 
-                self.session.add(clinic)
-                self.collected_count += 1
-                action = "Added"
+                if matched_clinic:
+                    # MERGE: Update existing clinic with Yelp data
+                    clinic = matched_clinic
+                    clinic.yelp_business_id = business_id
+                    clinic.yelp_rating = business_data.get('rating')
+                    clinic.yelp_review_count = business_data.get('review_count')
+                    clinic.yelp_price_level = business_data.get('price')
+
+                    # Fill gaps with Yelp data
+                    if not clinic.latitude:
+                        clinic.latitude = coordinates.get('latitude')
+                    if not clinic.longitude:
+                        clinic.longitude = coordinates.get('longitude')
+                    if not clinic.phone:
+                        clinic.phone = business_data.get('phone')
+                    if not clinic.website:
+                        clinic.website = business_data.get('url')
+                    if mapped_type and (not clinic.clinic_type or clinic.clinic_type == "unknown"):
+                        clinic.clinic_type = mapped_type
+
+                    clinic.last_updated = datetime.utcnow()
+                    self.updated_count += 1
+                    action = f"MERGED (score={match_result['score']})"
+                    logger.info(
+                        f"🔗 Merged Yelp '{name}' with existing '{clinic.name}' - "
+                        f"{match_result['match_reasons']}"
+                    )
+
+                else:
+                    # Create new clinic (no match found)
+                    clinic = Clinic(
+                        yelp_business_id=business_id,
+                        name=name,
+                        address=location.get('address1'),
+                        city=location.get('city'),
+                        state=location.get('state'),
+                        zip_code=location.get('zip_code'),
+                        phone=business_data.get('phone'),
+                        website=business_data.get('url'),
+                        latitude=coordinates.get('latitude'),
+                        longitude=coordinates.get('longitude'),
+                        clinic_type=mapped_type,
+                        yelp_rating=business_data.get('rating'),
+                        yelp_review_count=business_data.get('review_count'),
+                        yelp_price_level=business_data.get('price'),
+                        categories=categories,
+                        is_active=True
+                    )
+
+                    self.session.add(clinic)
+                    self.collected_count += 1
+                    action = "Added"
 
             self.session.commit()
 

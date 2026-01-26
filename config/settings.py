@@ -1,3 +1,4 @@
+
 """
 Configuration management for Chicago Clinic Demand Intelligence system.
 Loads settings from environment variables with sensible defaults.
@@ -34,21 +35,18 @@ DB_USER = os.getenv('DB_USER', '')
 DB_PASSWORD = os.getenv('DB_PASSWORD', '')
 SQLITE_DB_PATH = os.getenv('SQLITE_DB_PATH', 'data/clinic_intelligence.db')
 
+# BigQuery Configuration
+BIGQUERY_PROJECT_ID = os.getenv('BIGQUERY_PROJECT_ID', '')
+BIGQUERY_DATASET = os.getenv('BIGQUERY_DATASET', 'clinic_data')
+
 # Geographic Configuration
 TARGET_CITY = os.getenv('TARGET_CITY', 'Chicago')
 TARGET_STATE = os.getenv('TARGET_STATE', 'IL')
 TARGET_COUNTRY = os.getenv('TARGET_COUNTRY', 'US')
 
 # Chicago ZIP codes for targeted analysis
-CHICAGO_ZIP_CODES = [
-    '60601', '60602', '60603', '60604', '60605', '60606', '60607', '60608',
-    '60609', '60610', '60611', '60612', '60613', '60614', '60615', '60616',
-    '60617', '60618', '60619', '60620', '60621', '60622', '60623', '60624',
-    '60625', '60626', '60628', '60629', '60630', '60631', '60632', '60633',
-    '60634', '60636', '60637', '60638', '60639', '60640', '60641', '60642',
-    '60643', '60644', '60645', '60646', '60647', '60649', '60651', '60652',
-    '60653', '60654', '60655', '60656', '60657', '60659', '60660', '60661'
-]
+
+CHICAGO_ZIP_CODES = ['60601', '60602', '60603']
 
 # Search Parameters
 SEARCH_RADIUS_METERS = int(os.getenv('SEARCH_RADIUS_METERS', 5000))
@@ -92,6 +90,10 @@ def get_database_url():
     """Generate database connection URL based on configuration."""
     if DB_TYPE == 'postgresql':
         return f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    elif DB_TYPE == 'bigquery':
+        return f"bigquery://{BIGQUERY_PROJECT_ID}/{BIGQUERY_DATASET}"
+    elif DB_TYPE == 'mssql':
+        return f"mssql+pymssql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     elif DB_TYPE == 'sqlite':
         return f"sqlite:///{SQLITE_DB_PATH}"
     else:

@@ -8,12 +8,11 @@ pytz==2023.3
 # Database
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
-sqlite3-python==1.0.0
 
 # API clients
 googlemaps==4.10.0
 pytrends==4.9.2
-yelp-fusion==1.0.3
+yelpapi==2.5.0
 
 # Data processing
 beautifulsoup4==4.12.2

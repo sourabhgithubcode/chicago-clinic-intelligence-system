@@ -51,6 +51,16 @@ class Clinic(Base):
     yelp_review_count = Column(Integer)
     yelp_price_level = Column(String(10))
 
+    # CALCULATED/CLEANED FIELDS (populated by data enrichment)
+    combined_rating = Column(Float)  # Average of Google + Yelp ratings
+    combined_review_count = Column(Integer)  # Sum of reviews from both
+    data_source = Column(String(20))  # 'Both', 'Google Only', 'Yelp Only'
+    has_google_data = Column(Boolean, default=False)
+    has_yelp_data = Column(Boolean, default=False)
+    rating_category = Column(String(30))  # 'Low', 'Medium', 'Good', 'Excellent'
+    review_volume_category = Column(String(30))  # 'Low', 'Medium', 'High', 'Very High'
+    data_quality_score = Column(Integer)  # 0-100 completeness score
+
     # Operating Hours
     hours_json = Column(JSON)
     is_open_now = Column(Boolean)

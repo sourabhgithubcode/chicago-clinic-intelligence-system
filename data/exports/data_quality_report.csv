@@ -1,0 +1,10 @@
+metric,value,percentage
+Total Clinics,100,100%
+Both APIs (Google+Yelp),6,6.0%
+Google Only,27,27.0%
+Yelp Only,67,67.0%
+Complete Records (70%+ quality),99,99.0%
+Missing Phone,3,3.0%
+Missing Coordinates,0,0.0%
+Duplicates Found,0,-
+Records Merged,0,-

@@ -22,6 +22,7 @@ from config.settings import (
 )
 from src.database.models import Clinic, Review, DataCollectionLog
 from src.database.init_db import get_session
+from src.utils.clinic_matcher import ClinicMatcher, merge_clinic_data
 
 
 class GooglePlacesCollector:
@@ -74,12 +75,20 @@ class GooglePlacesCollector:
         try:
             result = self.client.place(
                 place_id=place_id,
-                fields=[
-                    'name', 'formatted_address', 'geometry', 'rating',
-                    'user_ratings_total', 'formatted_phone_number', 'website',
-                    'opening_hours', 'reviews', 'types', 'price_level',
-                    'address_components'
-                ]
+               fields = [
+"place_id",
+"name",
+"formatted_address",
+"geometry/location",
+"business_status",
+"type",
+"rating",
+"user_ratings_total",
+"formatted_phone_number",
+"website",
+"opening_hours",
+"reviews"
+]
             )
 
             return result.get('result', {})
@@ -114,11 +123,33 @@ class GooglePlacesCollector:
     def save_clinic(self, place_data):
         """
         Save or update clinic data in the database.
+
+        BIDIRECTIONAL MATCHING:
+        -----------------------
+        Before creating a new record, we check if this Google clinic
+        matches an existing Yelp-only record. If so, we MERGE them.
+
+        EXAMPLE:
+            Existing in DB (from Yelp):
+                id=5, name="Rush Medical Center", yelp_business_id="abc123"
+                google_place_id=NULL, google_rating=NULL
+
+            New from Google:
+                name="Rush University Medical Center", place_id="xyz789"
+                google_rating=4.5
+
+            Matching finds 85% name similarity + same coordinates
+            → MERGE into existing record instead of creating duplicate
+
+            Result:
+                id=5, name="Rush Medical Center"
+                yelp_business_id="abc123", google_place_id="xyz789"
+                google_rating=4.5, yelp_rating=4.0
         """
         try:
             place_id = place_data.get('place_id')
 
-            # Check if clinic already exists
+            # Step 1: Check if clinic already exists by Google ID
             clinic = self.session.query(Clinic).filter_by(
                 google_place_id=place_id
             ).first()
@@ -126,11 +157,20 @@ class GooglePlacesCollector:
             # Extract address components
             address_components = place_data.get('address_components', [])
             addr_data = self.extract_address_components(address_components)
-
             location = place_data.get('geometry', {}).get('location', {})
 
+            # Prepare data dict for matching
+            new_clinic_data = {
+                'name': place_data.get('name'),
+                'address': place_data.get('formatted_address'),
+                'phone': place_data.get('formatted_phone_number'),
+                'latitude': location.get('lat'),
+                'longitude': location.get('lng'),
+                'zip_code': addr_data['zip_code']
+            }
+
             if clinic:
-                # Update existing clinic
+                # Update existing Google clinic
                 clinic.name = place_data.get('name')
                 clinic.address = place_data.get('formatted_address')
                 clinic.city = addr_data['city']
@@ -151,29 +191,67 @@ class GooglePlacesCollector:
                 action = "Updated"
 
             else:
-                # Create new clinic
-                clinic = Clinic(
-                    google_place_id=place_id,
-                    name=place_data.get('name'),
-                    address=place_data.get('formatted_address'),
-                    city=addr_data['city'],
-                    state=addr_data['state'],
-                    zip_code=addr_data['zip_code'],
-                    phone=place_data.get('formatted_phone_number'),
-                    website=place_data.get('website'),
-                    latitude=location.get('lat'),
-                    longitude=location.get('lng'),
-                    google_rating=place_data.get('rating'),
-                    google_review_count=place_data.get('user_ratings_total'),
-                    google_price_level=place_data.get('price_level'),
-                    categories=place_data.get('types', []),
-                    hours_json=place_data.get('opening_hours', {}),
-                    is_active=True
+                # Step 2: BIDIRECTIONAL MATCHING
+                # Try to find matching Yelp-only clinic (no google_place_id)
+                yelp_only_clinics = self.session.query(Clinic).filter(
+                    Clinic.google_place_id.is_(None),
+                    Clinic.yelp_business_id.isnot(None)
+                ).all()
+
+                matched_clinic, match_result = ClinicMatcher.find_matching_clinic(
+                    new_clinic_data, yelp_only_clinics, same_zip_only=False  # Use coordinates, not ZIP
                 )
 
-                self.session.add(clinic)
-                self.collected_count += 1
-                action = "Added"
+                if matched_clinic:
+                    # MERGE: Update existing Yelp clinic with Google data
+                    clinic = matched_clinic
+                    clinic.google_place_id = place_id
+                    clinic.google_rating = place_data.get('rating')
+                    clinic.google_review_count = place_data.get('user_ratings_total')
+                    clinic.google_price_level = place_data.get('price_level')
+                    clinic.hours_json = place_data.get('opening_hours', {})
+                    clinic.categories = place_data.get('types', [])
+
+                    # Fill gaps (prefer Google data for these fields)
+                    if not clinic.address or len(place_data.get('formatted_address', '')) > len(clinic.address or ''):
+                        clinic.address = place_data.get('formatted_address')
+                    if not clinic.phone:
+                        clinic.phone = place_data.get('formatted_phone_number')
+                    if not clinic.website:
+                        clinic.website = place_data.get('website')
+
+                    clinic.last_updated = datetime.utcnow()
+
+                    self.updated_count += 1
+                    action = f"MERGED (score={match_result['score']})"
+                    logger.info(
+                        f"🔗 Merged Google '{place_data.get('name')}' with "
+                        f"Yelp '{clinic.name}' - {match_result['match_reasons']}"
+                    )
+                else:
+                    # Create new clinic (no match found)
+                    clinic = Clinic(
+                        google_place_id=place_id,
+                        name=place_data.get('name'),
+                        address=place_data.get('formatted_address'),
+                        city=addr_data['city'],
+                        state=addr_data['state'],
+                        zip_code=addr_data['zip_code'],
+                        phone=place_data.get('formatted_phone_number'),
+                        website=place_data.get('website'),
+                        latitude=location.get('lat'),
+                        longitude=location.get('lng'),
+                        google_rating=place_data.get('rating'),
+                        google_review_count=place_data.get('user_ratings_total'),
+                        google_price_level=place_data.get('price_level'),
+                        categories=place_data.get('types', []),
+                        hours_json=place_data.get('opening_hours', {}),
+                        is_active=True
+                    )
+
+                    self.session.add(clinic)
+                    self.collected_count += 1
+                    action = "Added"
 
             self.session.commit()
 
@@ -307,5 +385,4 @@ if __name__ == "__main__":
     collector = GooglePlacesCollector()
     try:
         collector.collect_all_chicago()
-    finally:
-        collector.close()
+    finally:        collector.close()
