@@ -8,8 +8,12 @@ This project uses descriptive file names so anyone can understand what each file
 
 **Examples:**
 - `collect_google_places_api_data.py` (not `google_places_collector.py`)
-- `calculate_visibility_scores.py` (not `scoring_engine.py`)
 - `knn_missing_data_imputation.py` (not `comprehensive_imputation.py`)
+- `deduplicate_standardize_data.py` (not `data_cleaner.py`)
+
+## Core Pipeline: APIs → Collect → Clean → Neon → Power BI
+
+The project follows a streamlined pipeline with only essential files.
 
 ## File Inventory
 
@@ -17,75 +21,96 @@ This project uses descriptive file names so anyone can understand what each file
 
 | File Name | What It Does |
 |-----------|--------------|
-| `run_automated_data_collection_pipeline.py` | Master script that runs the complete data collection, cleaning, and imputation pipeline |
-| `demo_quick_data_collection.py` | Quick demo/test script for trying out data collection from APIs |
-| `inspect_database_records.py` | View and explore data stored in the PostgreSQL database |
-| `export_clean_data_for_powerbi.py` | Export cleaned data as CSV files for Power BI import |
-| `migrate_database_sqlite_to_postgresql.py` | One-time migration script to move data from SQLite to Neon PostgreSQL |
-| `test_database_connection.py` | Test connection to PostgreSQL database |
+| `run_automated_data_collection_pipeline.py` | **Master orchestration script** - Runs complete data collection, cleaning, and imputation pipeline |
 
 ### Data Collectors (`src/collectors/`)
 
 | File Name | What It Does |
 |-----------|--------------|
-| `collect_google_places_api_data.py` | Collects clinic data from Google Places API (locations, ratings, reviews) |
-| `collect_yelp_fusion_api_data.py` | Collects clinic data from Yelp Fusion API (business info, ratings, reviews) |
-| `collect_google_trends_search_data.py` | Collects search demand trends from Google Trends API |
+| `collect_google_places_api_data.py` | Collects clinic data from Google Places API → writes to Neon database |
+| `collect_yelp_fusion_api_data.py` | Collects clinic data from Yelp Fusion API → writes to Neon database |
 
 ### Data Processing (`src/utils/`)
 
 | File Name | What It Does |
 |-----------|--------------|
-| `calculate_combined_metrics.py` | Calculates combined ratings, data sources, quality scores for each clinic |
-| `deduplicate_standardize_data.py` | Finds duplicate clinics, merges them, standardizes phone/name/ZIP formats |
-| `duplicate_clinic_detector_merger.py` | Core algorithm for fuzzy matching and merging duplicate clinic records |
-| `knn_missing_data_imputation.py` | Fills ALL missing data using K-Nearest Neighbors and multi-strategy imputation |
-| `zipcode_knn_geographic_imputation.py` | Legacy script (replaced by comprehensive imputation) - fills missing ZIP codes |
-| `scheduler.py` | Scheduling utilities for automated data refresh |
+| `calculate_combined_metrics.py` | Calculates combined ratings (Google + Yelp), data sources, quality scores |
+| `deduplicate_standardize_data.py` | Finds duplicate clinics, merges them, standardizes formats |
+| `duplicate_clinic_detector_merger.py` | Core fuzzy matching algorithm for duplicate detection (used by deduplicate script) |
+| `knn_missing_data_imputation.py` | Fills ALL missing data: ZIP codes, clinic types, ratings using K-NN and multi-strategy imputation |
 
 ### Database (`src/database/`)
 
 | File Name | What It Does |
 |-----------|--------------|
-| `sqlalchemy_database_models.py` | SQLAlchemy ORM models defining database tables (Clinic, Review, etc.) |
-| `initialize_create_database_tables.py` | Creates database tables, manages database connections |
-
-### Analysis (`src/analysis/`)
-
-| File Name | What It Does |
-|-----------|--------------|
-| `calculate_visibility_scores.py` | Calculates visibility scores based on ratings, reviews, and online presence |
-
-### Dashboards (`dashboards/`)
-
-| File Name | What It Does |
-|-----------|--------------|
-| `powerbi_direct_database_connector_script.py` | Python script for direct Power BI connection to PostgreSQL database |
+| `sqlalchemy_database_models.py` | SQLAlchemy ORM models defining database schema (Clinic, Review, SearchTrend, etc.) |
+| `initialize_create_database_tables.py` | Creates database tables, manages connections to Neon PostgreSQL |
 
 ## Documentation Files
 
 | File Name | Purpose |
 |-----------|---------|
-| `README.md` | Technical project overview, installation, usage |
-| `BUSINESS_CASE_README.md` | Business-focused narrative: why, what, how, outcomes, learnings |
-| `CLAUDE.md` | Complete technical documentation with architecture decisions and conversation log |
+| `README.md` | Complete project overview with business context, technical details, pipeline flow |
+| `CLAUDE.md` | Detailed technical documentation with architecture decisions and development log |
 | `POWERBI_NEON_CONNECTION.md` | Step-by-step guide for connecting Power BI to Neon PostgreSQL |
-| `IMPLEMENTATION_SUMMARY.md` | Summary of implementation details |
-| `FILE_NAMING_GUIDE.md` | This file - explains the naming convention |
+| `FILE_NAMING_GUIDE.md` | This file - explains naming convention and file structure |
+
+## Pipeline Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  run_automated_data_collection_pipeline.py (Orchestrator)       │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 1-2: Data Collection                                      │
+│  • collect_google_places_api_data.py → Neon Database            │
+│  • collect_yelp_fusion_api_data.py → Neon Database              │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 3: Data Enrichment                                        │
+│  • calculate_combined_metrics.py                                │
+│    - Combined ratings, data sources, quality scores             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 4: Data Cleaning & Deduplication                          │
+│  • deduplicate_standardize_data.py                              │
+│    - Uses: duplicate_clinic_detector_merger.py                  │
+│    - Merges duplicates, standardizes formats                    │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  STEP 5: Missing Data Imputation                                │
+│  • knn_missing_data_imputation.py                               │
+│    - ZIP codes (K-NN geographic)                                │
+│    - Clinic types (name/category inference)                     │
+│    - Ratings (cross-platform proxy)                             │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Neon PostgreSQL Database (100% Complete Data)                  │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│  Power BI Dashboards (Direct Connection)                        │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Why This Matters
 
 **Before:** Files like `view_data.py`, `quickstart.py`, `models.py` required opening files to understand their purpose.
 
-**After:** Files like `inspect_database_records.py`, `demo_quick_data_collection.py`, `sqlalchemy_database_models.py` are self-documenting.
+**After:** Files like `collect_google_places_api_data.py`, `knn_missing_data_imputation.py`, `sqlalchemy_database_models.py` are self-documenting.
 
 ## Benefits
 
-✅ **Onboarding:** New team members understand the codebase structure immediately
-✅ **Maintenance:** Easy to find the right file when debugging or enhancing
-✅ **Collaboration:** No ambiguity about what each script does
-✅ **Documentation:** File names serve as inline documentation
-✅ **Searchability:** Descriptive names make grep/search much more effective
+✅ **Clarity:** File names describe exactly what each script does
+✅ **Onboarding:** New developers understand structure immediately
+✅ **Focused:** Only essential pipeline files, no clutter
+✅ **Maintenance:** Easy to find and modify specific functionality
+✅ **Searchability:** Descriptive names make finding files trivial
 
 ## Naming Patterns Used
 
@@ -95,52 +120,87 @@ This project uses descriptive file names so anyone can understand what each file
 - `deduplicate_` - Removes duplicate records
 - `knn_` - Uses K-Nearest Neighbors algorithm
 - `run_` - Orchestrates multiple steps
-- `demo_` - Test/demonstration script
-- `inspect_` - View/explore data
-- `export_` - Save data to external format
-- `migrate_` - Move data between systems
-- `test_` - Verify functionality
 - `initialize_` - Set up initial state
 
 ### What It Acts On
-- `_google_places_api_data` - Google Places API
-- `_yelp_fusion_api_data` - Yelp Fusion API
-- `_database_records` - Database contents
-- `_visibility_scores` - Visibility metrics
+- `_google_places_api_data` - Google Places API source
+- `_yelp_fusion_api_data` - Yelp Fusion API source
+- `_database_` - Database operations
 - `_combined_metrics` - Aggregated calculations
 - `_missing_data_` - Null/empty values
+- `_clinic_` - Clinic records
 
 ### Technology Indicators
 - `_knn_` - K-Nearest Neighbors algorithm
 - `_sqlalchemy_` - SQLAlchemy ORM
-- `_postgresql_` - PostgreSQL database
-- `_powerbi_` - Power BI integration
-
-## Future File Additions
-
-When adding new files, follow this format:
-
-```
-[action]_[what]_[technology/method].py
-```
-
-**Examples:**
-- `predict_clinic_success_ml_model.py` - Predictive modeling
-- `scrape_competitor_websites_selenium.py` - Web scraping
-- `analyze_patient_sentiment_vader.py` - Sentiment analysis
-- `forecast_demand_time_series.py` - Time series forecasting
+- `_neon_` or `_postgresql_` - Neon PostgreSQL
 
 ## Quick Reference
 
 **Need to...**
-- **Collect new data?** → `run_automated_data_collection_pipeline.py`
-- **View database?** → `inspect_database_records.py`
-- **Export for Power BI?** → `export_clean_data_for_powerbi.py`
-- **Test API connection?** → `demo_quick_data_collection.py`
-- **Fix missing data?** → `knn_missing_data_imputation.py`
-- **Remove duplicates?** → `deduplicate_standardize_data.py`
-- **Change database schema?** → `src/database/sqlalchemy_database_models.py`
-- **Add new API?** → Create `collect_[source]_api_data.py` in `src/collectors/`
+- **Run the complete pipeline?** → `python3 run_automated_data_collection_pipeline.py --full`
+- **Collect only Google data?** → `python3 run_automated_data_collection_pipeline.py --google`
+- **Collect only Yelp data?** → `python3 run_automated_data_collection_pipeline.py --yelp`
+- **Clean existing data?** → `python3 run_automated_data_collection_pipeline.py --clean-only`
+- **Modify database schema?** → Edit `src/database/sqlalchemy_database_models.py`
+- **Change imputation logic?** → Edit `src/utils/knn_missing_data_imputation.py`
+- **Adjust duplicate detection?** → Edit `src/utils/duplicate_clinic_detector_merger.py`
+
+## Project Structure
+
+```
+chicago-clinic-intelligence-system/
+├── run_automated_data_collection_pipeline.py  ← START HERE
+│
+├── src/
+│   ├── collectors/           ← Data collection from APIs
+│   │   ├── collect_google_places_api_data.py
+│   │   └── collect_yelp_fusion_api_data.py
+│   │
+│   ├── utils/                ← Data processing & cleaning
+│   │   ├── calculate_combined_metrics.py
+│   │   ├── deduplicate_standardize_data.py
+│   │   ├── duplicate_clinic_detector_merger.py
+│   │   └── knn_missing_data_imputation.py
+│   │
+│   └── database/             ← Database models & connections
+│       ├── sqlalchemy_database_models.py
+│       └── initialize_create_database_tables.py
+│
+├── data/                     ← Data storage (SQLite backup)
+├── config/                   ← Configuration settings
+├── docs/                     ← Additional documentation
+│
+└── Documentation Files
+    ├── README.md
+    ├── CLAUDE.md
+    ├── POWERBI_NEON_CONNECTION.md
+    └── FILE_NAMING_GUIDE.md (this file)
+```
+
+## Removed Files (Not Part of Core Pipeline)
+
+The following files were deleted as they were not essential to the core pipeline flow:
+
+**One-Time/Testing Scripts:**
+- `migrate_database_sqlite_to_postgresql.py` - One-time migration (already completed)
+- `test_database_connection.py` - Testing utility
+- `demo_quick_data_collection.py` - Demo script
+
+**Viewing/Export Tools:**
+- `inspect_database_records.py` - Database viewing (not part of pipeline)
+- `export_clean_data_for_powerbi.py` - CSV export (direct Neon connection used instead)
+
+**Legacy/Replaced Scripts:**
+- `zipcode_knn_geographic_imputation.py` - Replaced by comprehensive imputation
+- `scheduler.py` - Not used in current pipeline
+
+**Obsolete Connectors:**
+- `powerbi_direct_database_connector_script.py` - SQLite connector (now using Neon)
+
+**Redundant Documentation:**
+- `PROJECT_README.md` - Superseded by README.md
+- `IMPLEMENTATION_SUMMARY.md` - Info consolidated into README.md
 
 ---
 
