@@ -2,12 +2,13 @@
 Complete Data Pipeline - Collect, Clean, and Prepare for Power BI
 
 This script runs the full data collection and cleaning pipeline:
-1. Collect data from APIs → Neon database
-2. Enrich with calculated fields
-3. Find and merge duplicates
-4. Standardize and clean data
-5. Impute ALL missing data (ZIP codes, clinic types, ratings)
-6. Export clean CSVs for Power BI
+1. Collect clinic data from Google Places API → Neon database
+2. Collect clinic data from Yelp Fusion API → Neon database
+3. Collect search demand data from Google Trends API → Neon database
+4. Enrich with calculated fields (combined ratings, quality scores)
+5. Find and merge duplicates (fuzzy matching)
+6. Impute ALL missing data (ZIP codes, clinic types, ratings)
+7. Data ready for Power BI connection
 
 Comprehensive Imputation Includes:
 - ZIP codes (K-Nearest Neighbors geographic proximity)
@@ -19,15 +20,15 @@ Comprehensive Imputation Includes:
 USAGE:
 ------
 # Run full pipeline (all collectors + cleaning + imputation)
-python3 run_data_pipeline.py --full
+python3 run_automated_data_collection_pipeline.py --full
 
 # Run specific collector + cleaning + imputation
-python3 run_data_pipeline.py --google
-python3 run_data_pipeline.py --yelp
-python3 run_data_pipeline.py --trends
+python3 run_automated_data_collection_pipeline.py --google
+python3 run_automated_data_collection_pipeline.py --yelp
+python3 run_automated_data_collection_pipeline.py --trends
 
 # Just run cleaning + imputation on existing data
-python3 run_data_pipeline.py --clean-only
+python3 run_automated_data_collection_pipeline.py --clean-only
 """
 
 import sys
@@ -40,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from src.collectors.collect_google_places_api_data import GooglePlacesCollector
 from src.collectors.collect_yelp_fusion_api_data import YelpCollector
+from src.collectors.collect_google_trends_search_data import GoogleTrendsCollector
 from src.utils.calculate_combined_metrics import DataEnrichment
 from src.utils.deduplicate_standardize_data import DataCleaner
 from src.utils.knn_missing_data_imputation import run_comprehensive_imputation
@@ -84,10 +86,23 @@ class DataPipeline:
             logger.error(f"✗ Yelp collection failed: {e}")
             raise
 
+    def collect_trends_data(self):
+        """Collect search demand data from Google Trends."""
+        logger.info("STEP 3: Collecting Google Trends Data")
+        logger.info("-" * 80)
+
+        try:
+            collector = GoogleTrendsCollector()
+            collector.collect_all_keywords(timeframe='today 3-m')
+            logger.success(f"✓ Google Trends collection complete ({collector.collected_count} records)")
+        except Exception as e:
+            logger.error(f"✗ Google Trends collection failed: {e}")
+            raise
+
     def enrich_data(self):
         """Enrich data with calculated fields."""
         logger.info("")
-        logger.info("STEP 3: Data Enrichment")
+        logger.info("STEP 4: Data Enrichment")
         logger.info("-" * 80)
 
         enricher = DataEnrichment()
@@ -100,7 +115,7 @@ class DataPipeline:
     def clean_data(self):
         """Clean and deduplicate data."""
         logger.info("")
-        logger.info("STEP 4: Data Cleaning & Deduplication")
+        logger.info("STEP 5: Data Cleaning & Deduplication")
         logger.info("-" * 80)
 
         cleaner = DataCleaner()
@@ -114,7 +129,7 @@ class DataPipeline:
     def impute_missing_data(self):
         """Impute all missing data (ZIP codes, clinic types, ratings)."""
         logger.info("")
-        logger.info("STEP 5: Comprehensive Data Imputation (ALL Clinics)")
+        logger.info("STEP 6: Comprehensive Data Imputation (ALL Clinics)")
         logger.info("-" * 80)
 
         try:
@@ -155,9 +170,9 @@ class DataPipeline:
 
         # Default: run all collectors
         if collectors is None:
-            collectors = ['google', 'yelp']
+            collectors = ['google', 'yelp', 'trends']
 
-        # Step 1-2: Data Collection
+        # Step 1-3: Data Collection
         if 'google' in collectors:
             self.collect_google_data()
             logger.info("")
@@ -166,13 +181,17 @@ class DataPipeline:
             self.collect_yelp_data()
             logger.info("")
 
-        # Step 3: Enrichment
+        if 'trends' in collectors:
+            self.collect_trends_data()
+            logger.info("")
+
+        # Step 4: Enrichment
         self.enrich_data()
 
-        # Step 4: Cleaning
+        # Step 5: Cleaning
         result = self.clean_data()
 
-        # Step 5: Comprehensive Data Imputation
+        # Step 6: Comprehensive Data Imputation
         self.impute_missing_data()
 
         # Summary

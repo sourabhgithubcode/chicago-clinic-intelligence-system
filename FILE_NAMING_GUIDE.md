@@ -29,6 +29,7 @@ The project follows a streamlined pipeline with only essential files.
 |-----------|--------------|
 | `collect_google_places_api_data.py` | Collects clinic data from Google Places API → writes to Neon database |
 | `collect_yelp_fusion_api_data.py` | Collects clinic data from Yelp Fusion API → writes to Neon database |
+| `collect_google_trends_search_data.py` | Collects search demand trends from Google Trends API → identifies which services are trending |
 
 ### Data Processing (`src/utils/`)
 
@@ -63,26 +64,27 @@ The project follows a streamlined pipeline with only essential files.
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 1-2: Data Collection                                      │
+│  STEP 1-3: Data Collection                                      │
 │  • collect_google_places_api_data.py → Neon Database            │
 │  • collect_yelp_fusion_api_data.py → Neon Database              │
+│  • collect_google_trends_search_data.py → Neon Database         │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 3: Data Enrichment                                        │
+│  STEP 4: Data Enrichment                                        │
 │  • calculate_combined_metrics.py                                │
 │    - Combined ratings, data sources, quality scores             │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 4: Data Cleaning & Deduplication                          │
+│  STEP 5: Data Cleaning & Deduplication                          │
 │  • deduplicate_standardize_data.py                              │
 │    - Uses: duplicate_clinic_detector_merger.py                  │
 │    - Merges duplicates, standardizes formats                    │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  STEP 5: Missing Data Imputation                                │
+│  STEP 6: Missing Data Imputation                                │
 │  • knn_missing_data_imputation.py                               │
 │    - ZIP codes (K-NN geographic)                                │
 │    - Clinic types (name/category inference)                     │
@@ -91,10 +93,12 @@ The project follows a streamlined pipeline with only essential files.
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Neon PostgreSQL Database (100% Complete Data)                  │
+│  • Clinics, Reviews, SearchTrends tables populated              │
 └─────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  Power BI Dashboards (Direct Connection)                        │
+│  • Market demand analysis using search trend data               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -139,8 +143,9 @@ The project follows a streamlined pipeline with only essential files.
 
 **Need to...**
 - **Run the complete pipeline?** → `python3 run_automated_data_collection_pipeline.py --full`
-- **Collect only Google data?** → `python3 run_automated_data_collection_pipeline.py --google`
+- **Collect only Google Places data?** → `python3 run_automated_data_collection_pipeline.py --google`
 - **Collect only Yelp data?** → `python3 run_automated_data_collection_pipeline.py --yelp`
+- **Collect only Google Trends data?** → `python3 run_automated_data_collection_pipeline.py --trends`
 - **Clean existing data?** → `python3 run_automated_data_collection_pipeline.py --clean-only`
 - **Modify database schema?** → Edit `src/database/sqlalchemy_database_models.py`
 - **Change imputation logic?** → Edit `src/utils/knn_missing_data_imputation.py`
@@ -155,7 +160,8 @@ chicago-clinic-intelligence-system/
 ├── src/
 │   ├── collectors/           ← Data collection from APIs
 │   │   ├── collect_google_places_api_data.py
-│   │   └── collect_yelp_fusion_api_data.py
+│   │   ├── collect_yelp_fusion_api_data.py
+│   │   └── collect_google_trends_search_data.py
 │   │
 │   ├── utils/                ← Data processing & cleaning
 │   │   ├── calculate_combined_metrics.py
@@ -175,7 +181,8 @@ chicago-clinic-intelligence-system/
     ├── README.md
     ├── CLAUDE.md
     ├── POWERBI_NEON_CONNECTION.md
-    └── FILE_NAMING_GUIDE.md (this file)
+    ├── FILE_NAMING_GUIDE.md (this file)
+    └── PROJECT_WALKTHROUGH_GUIDE.md
 ```
 
 ## Removed Files (Not Part of Core Pipeline)
@@ -201,6 +208,8 @@ The following files were deleted as they were not essential to the core pipeline
 **Redundant Documentation:**
 - `PROJECT_README.md` - Superseded by README.md
 - `IMPLEMENTATION_SUMMARY.md` - Info consolidated into README.md
+
+**Note:** `collect_google_trends_search_data.py` was temporarily removed but has been **restored** as it provides critical search demand data for service opportunity analysis.
 
 ---
 
