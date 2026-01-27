@@ -29,7 +29,7 @@ Public data from Google Places, Yelp, and Google Trends contains the answers—b
 
 ---
 
-## What You Did → Tools + Your Role
+## What I Did → Tools + Your Role
 
 **My Role:** Solo Data Analyst & Developer (End-to-End Project)
 
@@ -54,7 +54,7 @@ A fully automated business intelligence platform that transforms raw API data in
 
 ---
 
-## How You Did It → Focus on Thinking + Key Decisions
+## How I Did It → Focus on Thinking + Key Decisions
 
 ### Critical Problem: 57% Missing Data Would Destroy Insights
 
