@@ -11,7 +11,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.database.models import Base
+from src.database.sqlalchemy_database_models import Base
 from config.settings import get_database_url, LOG_FILE, LOG_LEVEL
 
 

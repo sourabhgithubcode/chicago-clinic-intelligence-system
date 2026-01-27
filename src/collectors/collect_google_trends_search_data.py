@@ -19,8 +19,8 @@ from config.settings import (
     SERVICE_CATEGORIES,
     API_RATE_LIMIT_DELAY
 )
-from src.database.models import SearchTrend, DataCollectionLog
-from src.database.init_db import get_session
+from src.database.sqlalchemy_database_models import SearchTrend, DataCollectionLog
+from src.database.initialize_create_database_tables import get_session
 
 
 class GoogleTrendsCollector:
@@ -216,7 +216,7 @@ class GoogleTrendsCollector:
 
 
 if __name__ == "__main__":
-    from src.database.init_db import setup_logging
+    from src.database.initialize_create_database_tables import setup_logging
 
     setup_logging()
 

@@ -19,9 +19,9 @@ from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.database.models import Clinic, Review, VisibilityScore, DemandMetric
-from src.database.init_db import get_session
-from src.utils.clinic_matcher import ClinicMatcher
+from src.database.sqlalchemy_database_models import Clinic, Review, VisibilityScore, DemandMetric
+from src.database.initialize_create_database_tables import get_session
+from src.utils.duplicate_clinic_detector_merger import ClinicMatcher
 
 
 class DataCleaner:

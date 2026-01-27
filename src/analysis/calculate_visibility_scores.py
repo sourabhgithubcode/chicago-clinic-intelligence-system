@@ -12,11 +12,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from src.database.models import (
+from src.database.sqlalchemy_database_models import (
     Clinic, Review, SearchTrend, VisibilityScore,
     DemandMetric, CompetitorAnalysis
 )
-from src.database.init_db import get_session
+from src.database.initialize_create_database_tables import get_session
 
 
 class ScoringEngine:
@@ -484,7 +484,7 @@ class ScoringEngine:
 
 
 if __name__ == "__main__":
-    from src.database.init_db import setup_logging
+    from src.database.initialize_create_database_tables import setup_logging
 
     setup_logging()
 

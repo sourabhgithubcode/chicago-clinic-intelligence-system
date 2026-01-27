@@ -38,11 +38,11 @@ from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.collectors.google_places_collector import GooglePlacesCollector
-from src.collectors.yelp_collector import YelpCollector
-from src.utils.data_enrichment import DataEnrichment
-from src.utils.data_cleaner import DataCleaner
-from src.utils.comprehensive_imputation import run_comprehensive_imputation
+from src.collectors.collect_google_places_api_data import GooglePlacesCollector
+from src.collectors.collect_yelp_fusion_api_data import YelpCollector
+from src.utils.calculate_combined_metrics import DataEnrichment
+from src.utils.deduplicate_standardize_data import DataCleaner
+from src.utils.knn_missing_data_imputation import run_comprehensive_imputation
 
 
 class DataPipeline:
@@ -249,7 +249,7 @@ def main():
     args = parser.parse_args()
 
     # Setup logging
-    from src.database.init_db import setup_logging
+    from src.database.initialize_create_database_tables import setup_logging
     setup_logging()
 
     # Initialize pipeline

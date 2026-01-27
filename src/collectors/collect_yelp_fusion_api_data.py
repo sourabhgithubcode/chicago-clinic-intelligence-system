@@ -19,8 +19,8 @@ from config.settings import (
     API_RATE_LIMIT_DELAY,
     MAX_RETRIES
 )
-from src.database.models import Clinic, Review, DataCollectionLog
-from src.database.init_db import get_session
+from src.database.sqlalchemy_database_models import Clinic, Review, DataCollectionLog
+from src.database.initialize_create_database_tables import get_session
 from src.utils.clinic_matcher import ClinicMatcher, merge_clinic_data
 
 
@@ -465,7 +465,7 @@ class YelpCollector:
 
 
 if __name__ == "__main__":
-    from src.database.init_db import setup_logging
+    from src.database.initialize_create_database_tables import setup_logging
 
     setup_logging()
 

@@ -11,8 +11,8 @@ import pandas as pd
 # Add project to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.database.init_db import get_session
-from src.database.models import Clinic, Review, SearchTrend, VisibilityScore, DataCollectionLog
+from src.database.initialize_create_database_tables import get_session
+from src.database.sqlalchemy_database_models import Clinic, Review, SearchTrend, VisibilityScore, DataCollectionLog
 from sqlalchemy import func
 
 

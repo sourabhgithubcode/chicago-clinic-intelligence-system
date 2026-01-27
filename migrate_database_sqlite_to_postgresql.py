@@ -11,7 +11,7 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from src.database.models import (
+from src.database.sqlalchemy_database_models import (
     Clinic, Review, SearchTrend, VisibilityScore,
     DemandMetric, CompetitorAnalysis, DataCollectionLog
 )

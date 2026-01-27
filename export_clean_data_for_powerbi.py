@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from config.settings import get_database_url
-from src.database.models import (
+from src.database.sqlalchemy_database_models import (
     Clinic, Review, SearchTrend, VisibilityScore,
     DemandMetric, CompetitorAnalysis, DataCollectionLog
 )
