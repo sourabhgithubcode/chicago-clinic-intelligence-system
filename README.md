@@ -2,6 +2,9 @@
 
 A comprehensive healthcare analytics platform that provides actionable business intelligence for clinic owners, investors, and healthcare strategists in Chicago. The system combines data from multiple sources to deliver insights on market opportunities, competitive positioning, patient demand trends, and clinic performance metrics.
 
+Demo Videos:
+https://docs.google.com/document/d/1u3NEVQDcKDj-DsxUBb80S9kTt3Tvo2OpVjh3i_Ruo1s/edit?tab=t.0
+
 ## Overview
 
 This system collects and analyzes data from Google Places, Yelp, and Google Trends to provide a 360-degree view of the Chicago healthcare market. It features **9 interactive Power BI dashboards** with real-time insights on clinic performance, market gaps, competition, and patient acquisition strategies.
