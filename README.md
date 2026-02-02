@@ -2,6 +2,9 @@
 
 A comprehensive healthcare analytics platform that provides actionable business intelligence for clinic owners, investors, and healthcare strategists in Chicago. The system combines data from multiple sources to deliver insights on market opportunities, competitive positioning, patient demand trends, and clinic performance metrics.
 
+![ScreenRecording2026-02-02at2 48 20PM-ezgif com-speed](https://github.com/user-attachments/assets/9e072e16-102d-4c16-ba1a-2a1ebeae6cd0)
+
+
 Demo Videos:
 https://docs.google.com/document/d/1u3NEVQDcKDj-DsxUBb80S9kTt3Tvo2OpVjh3i_Ruo1s/edit?tab=t.0
 
@@ -572,85 +575,5 @@ The system uses a fully automated pipeline (`run_data_pipeline.py`) that handles
 - **Total Reviews Analyzed:** 191
 - **Search Trends Tracked:** 1,512 data points
 
-## Usage Examples
 
-### Collect Data from All Sources
-```bash
-python3 run_data_pipeline.py --full
-```
 
-### Update Only Google Places Data
-```bash
-python3 run_data_pipeline.py --google
-```
-
-### Clean and Impute Existing Data
-```bash
-python3 run_data_pipeline.py --clean-only
-```
-
-### Preview Imputation Changes (Dry Run)
-```bash
-python3 src/utils/comprehensive_imputation.py --dry-run
-```
-
-### Test Clinic Matching Algorithm
-```bash
-python3 -m src.utils.clinic_matcher
-```
-
-## Power BI Integration
-
-### Method 1: Direct PostgreSQL Connection (Recommended)
-1. Open Power BI Desktop
-2. Get Data → PostgreSQL database
-3. Enter connection details from `.env` file
-4. Select all tables
-5. Create relationships (auto-detected)
-6. Build visualizations
-
-### Method 2: CSV Import (Backup)
-1. Run data export: `python3 -m src.utils.data_cleaner`
-2. Import CSVs from `data/exports/` folder
-3. Power Query automatically loads clean data
-
-See `POWERBI_NEON_CONNECTION.md` for detailed setup instructions.
-
-## Data Quality & Validation
-
-- **Pre-Collection:** API rate limiting, error handling
-- **Post-Collection:** Duplicate detection with fuzzy matching
-- **Enrichment:** Calculated fields with validation rules
-- **Imputation:** Conservative strategies with distance thresholds
-- **Validation:** Data quality scores (0-100) for transparency
-- **Monitoring:** Collection logs track success rates and errors
-
-## Contributing
-
-This project was developed as part of a data analytics capstone. For questions or collaboration:
-- **Developer:** Sourabh Rodagi
-- **Institution:** DePaul University, MS Business Analytics
-- **Project Type:** Healthcare Analytics & Business Intelligence
-
-## License
-
-This project is for educational and analytical purposes. API data is subject to Google Places and Yelp Terms of Service.
-
-## Acknowledgments
-
-- **Google Places API** - Clinic location and review data
-- **Yelp Fusion API** - Business information and ratings
-- **Google Trends API (pytrends)** - Search demand data
-- **Neon Database** - Serverless PostgreSQL hosting
-- **Power BI** - Interactive dashboard platform
-
-## Documentation
-
-- **CLAUDE.md** - Complete technical documentation with architecture decisions
-- **POWERBI_NEON_CONNECTION.md** - Power BI setup and connection guide
-- **requirements.txt** - Python package dependencies
-- **Database Models** - See `src/database/models.py` for full schema
-
----
-
-**Built with Claude Code** - Anthropic's AI-powered development assistant
